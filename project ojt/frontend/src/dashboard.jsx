@@ -1,14 +1,19 @@
 import { useEffect, useState } from "react";
-import { formatDateTime } from "./functions";
+import { formatDateTime} from "./functions";
 import CashAdvanceModal from "./popup/CashPopup";
+import OfficialModal from "./popup/Officialpopup";
+import UserModal from "./popup/Userpopup";
 function Dashboard() {
   const [cashAdvances, setCashAdvances] = useState([]);
   const [users, setUsers] = useState([]);
   const [bondedOfficials, setBondedOfficials] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [showOfficialModal, setShowOfficialModal] = useState(false); 
   const [selectedCashAdvance, setSelectedCashAdvance] = useState(null);
-
- const fetchData = () => {
+  const [selectedOfficial, setSelectedOfficial] = useState(null);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const fetchData = () => {
     fetch("http://localhost:3000/all")
       .then((res) => res.json())
       .then((data) => {
@@ -18,6 +23,23 @@ function Dashboard() {
       })
       .catch((err) => console.error("Error fetching data:", err));
   };
+  
+  const handleDeleteOfficial = async (id) => {
+  if (!window.confirm("Are you sure you want to delete this official?")) return;
+
+  try {
+    const res = await fetch(`http://localhost:5000/api/officials/${id}`, {
+      method: "DELETE",
+    });
+
+    if (!res.ok) throw new Error("Delete failed");
+
+    // refresh data AFTER delete
+    fetchData();
+  } catch (err) {
+    console.error("Delete error:", err);
+  }
+};
 
   useEffect(() => {
     fetchData(); // initial load
@@ -28,62 +50,131 @@ function Dashboard() {
 
     return () => clearInterval(interval); // cleanup
   }, []);
+const handleOfficialSubmit = async (formData) => {
+  const isEdit = !!selectedOfficial;
 
-  // Handle Form Submission (Create or Update)
-const handleModalSubmit = async (formData) => {
-  try {
-    const isEdit = !!selectedCashAdvance;
-    const url = isEdit 
-      ? `http://localhost:3000/cash-advances/${selectedCashAdvance.id}` 
-      : "http://localhost:3000/cash-advances";
-    
-    const method = isEdit ? "PUT" : "POST";
-    
-    // Clean and explicitly map values to match backend requirements
-    const bodyData = {
-  fund: formData.fund,
-  dv_number: formData.dv_number,
-  dv_date: formData.dv_date,
-  accountable_official: formData.accountable_official,
-  
-  // 1. Map to what MySQL actually accepts: 'Ongoing' or 'Done'
-  status: formData.status === "Pending" ? "Ongoing" : formData.status || "Ongoing", 
-  
-  amount: parseFloat(formData.amount) || 0,
-  spent: parseFloat(formData.spent) || 0,
-  refund: parseFloat(formData.refund) || 0,
-  bonded_official_id: formData.bonded_official_id ? parseInt(formData.bonded_official_id, 10) : 1,
-  created_by: 1
+  const url = isEdit
+    ? `http://localhost:3000/api/officials/${selectedOfficial.id}`
+    : "http://localhost:3000/api/officials";
+
+  const method = isEdit ? "PUT" : "POST";
+
+  await fetch(url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(formData),
+  });
+
+  fetchData();
 };
 
-    const response = await fetch(url, {
+const handleUserSubmit = async (formData) => {
+  try {
+    const isEdit = !!selectedUser;
+    const url = isEdit
+      ? `http://localhost:3000/api/users/${selectedUser.id}`
+      : "http://localhost:3000/api/users";
+
+    const method = isEdit ? "PUT" : "POST";
+
+    const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(bodyData),
+      body: JSON.stringify(formData),
     });
 
-    // Extract exact backend error logs if available
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Backend Error Message:", errorText);
-      throw new Error("Network transaction failed");
-    }
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Transaction failure");
 
-    setShowModal(false);
-    fetchData(); // Instantly update view
+    setShowUserModal(false);
+    fetchData(); // Instantly re-pull database values
   } catch (err) {
-    console.error("Submission error:", err);
-    alert("Failed to save transaction. Check terminal logs for detailed SQL errors.");
+    console.error("User Save error:", err);
+    alert(err.message);
   }
 };
+
+const handleDeleteUser = async (id) => {
+  if (!window.confirm("Are you sure you want to completely remove this user account?")) return;
+
+  try {
+    const res = await fetch(`http://localhost:3000/api/users/${id}`, {
+      method: "DELETE",
+    });
+
+    if (!res.ok) throw new Error("Deletion processing error");
+    fetchData();
+  } catch (err) {
+    console.error("User Delete Error:", err);
+  }
+};
+
+  // Handle Form Submission (Create or Update)
+  const handleModalSubmit = async (formData) => {
+    try {
+      const isEdit = !!selectedCashAdvance;
+      const url = isEdit
+        ? `http://localhost:3000/cash-advances/${selectedCashAdvance.id}`
+        : "http://localhost:3000/cash-advances";
+
+      const method = isEdit ? "PUT" : "POST";
+
+      // Clean and explicitly map values to match backend requirements
+      const bodyData = {
+        fund: formData.fund,
+        dv_number: formData.dv_number,
+        dv_date: formData.dv_date,
+        accountable_official: formData.accountable_official,
+
+        // 1. Map to what MySQL actually accepts: 'Ongoing' or 'Done'
+        status:
+          formData.status === "Pending"
+            ? "Ongoing"
+            : formData.status || "Ongoing",
+
+        amount: parseFloat(formData.amount) || 0,
+        spent: parseFloat(formData.spent) || 0,
+        refund: parseFloat(formData.refund) || 0,
+        bonded_official_id: formData.bonded_official_id
+          ? parseInt(formData.bonded_official_id, 10)
+          : 1,
+        created_by: 1,
+      };
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bodyData),
+      });
+
+      // Extract exact backend error logs if available
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Backend Error Message:", errorText);
+        throw new Error("Network transaction failed");
+      }
+
+      setShowModal(false);
+      fetchData(); // Instantly update view
+    } catch (err) {
+      console.error("Submission error:", err);
+      alert(
+        "Failed to save transaction. Check terminal logs for detailed SQL errors.",
+      );
+    }
+  };
   // Handle Record Removal
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this cash advance?")) return;
+    if (!window.confirm("Are you sure you want to delete this cash advance?"))
+      return;
 
     try {
-      const response = await fetch(`http://localhost:3000/cash-advances/${id}`, {
-        method: "DELETE",
-      });
+      const response = await fetch(
+        `http://localhost:3000/cash-advances/${id}`,
+        {
+          method: "DELETE",
+        },
+      );
 
       if (!response.ok) throw new Error("Delete request failed");
       fetchData();
@@ -92,7 +183,7 @@ const handleModalSubmit = async (formData) => {
     }
   };
   return (
-    <div className="min-h-screen bg-gray-100 p-6 space-y-6">
+      <div className="space-y-6">
       {/* ================= HEADER ================= */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">
@@ -114,9 +205,9 @@ const handleModalSubmit = async (formData) => {
           <button
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition"
             onClick={() => {
-  setSelectedCashAdvance(null);
-  setShowModal(true);
-}}
+              setSelectedCashAdvance(null);
+              setShowModal(true);
+            }}
           >
             + Create Cash Advance
           </button>
@@ -167,11 +258,13 @@ const handleModalSubmit = async (formData) => {
                   <td className="p-3">
                     <span
                       className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                        item.status === "Approved"
+                        item.status === "Done"
                           ? "bg-green-100 text-green-700"
-                          : item.status === "Pending"
+                          : item.status === "Ongoing"
                             ? "bg-yellow-100 text-yellow-700"
-                            : "bg-red-100 text-red-700"
+                            : item.status === "Canceled"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-gray-100 text-gray-700"
                       }`}
                     >
                       {item.status}
@@ -201,10 +294,23 @@ const handleModalSubmit = async (formData) => {
           </table>
         </div>
       </div>
+      
 
       {/* ================= USERS TABLE ================= */}
       <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-        <h2 className="p-4 text-lg font-bold text-gray-700">Users</h2>
+         <div className="flex justify-between items-center p-4 border-b">
+          <h2 className="text-lg font-bold text-gray-700">USERS</h2>
+
+          <button
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition"
+            onClick={() => {
+              setSelectedUser(null);
+              setShowUserModal(true);
+            }}
+          >
+            + Create USERS
+          </button>
+        </div>
 
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm text-left">
@@ -212,6 +318,7 @@ const handleModalSubmit = async (formData) => {
               <tr>
                 <th className="p-3">ID</th>
                 <th className="p-3">Username</th>
+                <th className="p-3">password</th>
                 <th className="p-3">Role</th>
                 <th className="p-3">Actions</th>
               </tr>
@@ -227,6 +334,7 @@ const handleModalSubmit = async (formData) => {
                 >
                   <td className="p-3">{u.id}</td>
                   <td className="p-3">{u.username}</td>
+                  <td className="p-3">{u.password_hash}</td>
                   <td className="p-3">
                     <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">
                       {u.role}
@@ -235,14 +343,17 @@ const handleModalSubmit = async (formData) => {
                   <td className="p-3 space-x-2">
                     <button
                       className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded"
-                      onClick={() => console.log("Edit", u.id)}
+                      onClick={() => {
+                  setSelectedUser(u);
+                  setShowUserModal(true);
+                }}
                     >
                       Edit
                     </button>
 
                     <button
                       className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
-                      onClick={() => console.log("Delete", u.id)}
+                      onClick={() => handleDeleteUser(u.id)}
                     >
                       Delete
                     </button>
@@ -253,12 +364,29 @@ const handleModalSubmit = async (formData) => {
           </table>
         </div>
       </div>
+      <UserModal
+  isOpen={showUserModal}
+  onClose={() => setShowUserModal(false)}
+  onSubmit={handleUserSubmit}
+  initialData={selectedUser}
+  key={selectedUser?.id || "user-creation"}
+/>
 
       {/* ================= BONDED OFFICIALS ================= */}
       <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-        <h2 className="p-4 text-lg font-bold text-gray-700">
-          Bonded Officials
-        </h2>
+        <div className="flex justify-between items-center p-4 border-b">
+          <h2 className="text-lg font-bold text-gray-700">Bonded Officials</h2>
+
+          <button
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition"
+            onClick={() => {
+              setSelectedOfficial(null); 
+              setShowOfficialModal(true); 
+            }}
+          >
+            + Create Bonded Officials
+          </button>
+        </div>
 
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm text-left">
@@ -295,17 +423,20 @@ const handleModalSubmit = async (formData) => {
                   <td className="p-3 space-x-2">
                     <button
                       className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded"
-                      onClick={() => console.log("Edit", b.id)}
+                      onClick={() => {
+  setSelectedOfficial(b);
+  setShowOfficialModal(true);
+}}
                     >
                       Edit
                     </button>
 
                     <button
-                      className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
-                      onClick={() => console.log("Delete", b.id)}
-                    >
-                      Delete
-                    </button>
+  className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
+  onClick={() => handleDeleteOfficial(b.id)}
+>
+  Delete
+</button>
                   </td>
                 </tr>
               ))}
@@ -313,16 +444,24 @@ const handleModalSubmit = async (formData) => {
           </table>
         </div>
       </div>
+      {/* ================= POPUP MODALS RENDERING ================= */}
       <CashAdvanceModal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
         onSubmit={handleModalSubmit}
         initialData={selectedCashAdvance}
-        key={selectedCashAdvance?.id || "creation-view"} // Fixed render state pattern
+        key={selectedCashAdvance?.id || "creation-view"} 
+      />
+
+      {/* FIXED: Rendered the newly created form popup below */}
+      <OfficialModal
+        isOpen={showOfficialModal}
+        onClose={() => setShowOfficialModal(false)}
+        onSubmit={handleOfficialSubmit}
+        initialData={selectedOfficial}
+        key={selectedOfficial?.id || "official-creation"}
       />
     </div>
-
-    
   );
 }
 

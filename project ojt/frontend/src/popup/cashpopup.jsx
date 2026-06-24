@@ -27,7 +27,7 @@ function CashAdvanceModal({ isOpen, onClose, onSubmit, initialData = null }) {
         amount: "",
         spent: "0",
         refund: "0",
-        status: "Pending",
+        status: "Ongoing",
       });
     }
   }, [isOpen, initialData]);
@@ -45,6 +45,9 @@ function CashAdvanceModal({ isOpen, onClose, onSubmit, initialData = null }) {
     e.preventDefault();
     onSubmit(formData);
   };
+
+  
+  
 
   return (
     <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
@@ -73,7 +76,7 @@ function CashAdvanceModal({ isOpen, onClose, onSubmit, initialData = null }) {
           />
 
           <input
-            type="date"
+            type="datetime-local"
             name="dv_date"
             value={formData.dv_date}
             onChange={handleChange}
@@ -107,6 +110,19 @@ function CashAdvanceModal({ isOpen, onClose, onSubmit, initialData = null }) {
             className="w-full border p-2 rounded"
             required
           />
+          <div>
+            <label className="text-xs text-gray-500">Status</label>
+
+            <select
+              name="status"
+              value={formData.status}
+              onChange={handleChange}
+              className="w-full border p-2 rounded"
+            >
+              <option value="Ongoing">Ongoing</option>
+              <option value="Done">Done</option>
+            </select>
+          </div>
 
           {/* Conditional editing fields: block updates to Spent/Refund on Creation */}
           {initialData && (
