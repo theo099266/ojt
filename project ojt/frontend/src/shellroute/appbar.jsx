@@ -4,6 +4,7 @@ import { FiRefreshCw } from "react-icons/fi"; // optional, replace with inline S
 export default function AppBar() {
   const [query, setQuery] = useState("");
   const [showIcons, setShowIcons] = useState(true);
+  const user = JSON.parse(localStorage.getItem("user"));
 
   function handleIconClick() {
     // hide both icons when either is clicked
@@ -24,12 +25,12 @@ export default function AppBar() {
   }
 
   return (
-    <header className="h-16 bg-white border-b flex items-center justify-between px-6">
+    <header className="h-16 bg-white border-b flex items-center justify-start px-6 gap-4">
       <h1 className="text-xl font-semibold">Cash Advance Dashboard</h1>
 
-      <div className="flex items-center gap-35">
+      <div className="flex items-center flex-1 ">
         {/* Search container */}
-        <div className="relative">
+        <div className="relative ml-auto">
           <div className="flex items-center">
             <input
               type="text"
@@ -111,12 +112,30 @@ export default function AppBar() {
             </button>
           </div>
         </div>
-        \
-        <div className="flex items-center gap-3">
-          <span>Admin</span>
-          <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center">
-            A
+        <div className="flex items-center gap-3 ml-auto">
+          <div className="flex flex-col min-w-0">
+            {/* Username: Bold, larger font, and dark text */}
+            <span className="font-bold text-base text-gray-900 leading-tight">
+              {user?.username}
+            </span>
+
+            {/* Description: Smaller font, muted gray text, and handles long strings safely */}
+            <span className="text-xs text-gray-500 truncate">
+              {user?.descrip}
+            </span>
           </div>
+          {user?.image ? (
+            <img
+              // Changed from image/jpeg to image/png
+              src={`data:image/png;base64,${user.image}`}
+              alt="Profile"
+              className="w-10 h-10 rounded-full object-cover"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center">
+              {user?.username?.charAt(0).toUpperCase()}
+            </div>
+          )}
         </div>
       </div>
     </header>

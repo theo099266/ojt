@@ -12,6 +12,31 @@ function CashAdvanceModal({ isOpen, onClose, onSubmit, initialData = null }) {
     refund: "0",
     status: "Pending",
   });
+  const handleChange = (e) => {
+  const { name, value } = e.target;
+
+  setFormData((prev) => {
+    const updated = {
+      ...prev,
+      [name]: value,
+    };
+
+    // Only auto-calculate when amount or spent changes
+    if (name === "amount" || name === "spent") {
+      const amount = Number(
+        name === "amount" ? value : updated.amount
+      ) || 0;
+
+      const spent = Number(
+        name === "spent" ? value : updated.spent
+      ) || 0;
+
+      updated.refund = amount - spent;
+    }
+
+    return updated;
+  });
+};
 
   // Fixed syntax error and properly tracked dependency array
   useEffect(() => {
@@ -34,20 +59,10 @@ function CashAdvanceModal({ isOpen, onClose, onSubmit, initialData = null }) {
 
   if (!isOpen) return null;
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
-
   const handleSubmit = (e) => {
     e.preventDefault();
     onSubmit(formData);
   };
-
-  
-  
 
   return (
     <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
@@ -125,30 +140,29 @@ function CashAdvanceModal({ isOpen, onClose, onSubmit, initialData = null }) {
           </div>
 
           {/* Conditional editing fields: block updates to Spent/Refund on Creation */}
-          {initialData && (
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-gray-500">Spent</label>
-                <input
-                  type="number"
-                  name="spent"
-                  value={formData.spent}
-                  onChange={handleChange}
-                  className="w-full border p-2 rounded"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">Refund</label>
-                <input
-                  type="number"
-                  name="refund"
-                  value={formData.refund}
-                  onChange={handleChange}
-                  className="w-full border p-2 rounded"
-                />
-              </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-gray-500">Spent</label>
+              <input
+                type="number"
+                name="spent"
+                value={formData.spent}
+                onChange={handleChange}
+                className="w-full border p-2 rounded"
+              />
             </div>
-          )}
+
+            <div>
+              <label className="text-xs text-gray-500">Refund</label>
+              <input
+  type="number"
+  name="refund"
+  value={formData.refund}
+  onChange={handleChange}
+  className="w-full border p-2 rounded"
+/>
+            </div>
+          </div>
 
           <div className="flex justify-end gap-2 pt-2">
             <button

@@ -3,6 +3,7 @@ import { formatDateTime} from "./functions";
 import CashAdvanceModal from "./popup/CashPopup";
 import OfficialModal from "./popup/Officialpopup";
 import UserModal from "./popup/Userpopup";
+import { PieChart } from '@mui/x-charts/PieChart';
 function Dashboard() {
   const [cashAdvances, setCashAdvances] = useState([]);
   const [users, setUsers] = useState([]);
@@ -182,6 +183,54 @@ const handleDeleteUser = async (id) => {
       console.error("Deletion error:", err);
     }
   };
+  const settledCash = cashAdvances
+  .filter((c) => c.status === "Done")
+  .reduce((sum, c) => sum + Number(c.amount), 0);
+
+// 2. Total Cash Currently Pending Out in the Field (Ongoing)
+const totalPendingCash = cashAdvances
+  .filter((c) => c.status === "Ongoing")
+  .reduce((sum, c) => sum + Number(c.amount), 0);
+
+// 3. AUDIT BREAKDOWN: Real Cash Exposure (Money advanced minus partial receipts)
+const actualCashAtRisk = cashAdvances
+  .filter((c) => c.status === "Ongoing")
+  .reduce((sum, c) => {
+    const unliquidatedForThisRow = Number(c.amount) - Number(c.spent) - Number(c.refund);
+    return sum + unliquidatedForThisRow;
+  }, 0);
+// 1. Total Outstanding (Total value of all active/open cash advances)
+const totalOutstanding = cashAdvances
+  .filter((c) => c.status === "Ongoing")
+  .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+
+// 2. Pending Liquidations (The net exposed cash still unliquidated out in the field)
+const pendingLiquidations = cashAdvances
+  .filter((c) => c.status === "Ongoing")
+  .reduce((sum, c) => {
+    const netUnliquidated = Number(c.amount || 0) - Number(c.spent || 0) - Number(c.refund || 0);
+    return sum + (netUnliquidated > 0 ? netUnliquidated : 0);
+  }, 0);
+
+// 3. Refund Due (Cash left over from ongoing advances that must be returned to treasury)
+const refundDue = cashAdvances
+  .filter((c) => c.status === "Ongoing")
+  .reduce((sum, c) => {
+    // If amount is greater than what was spent, the difference is due back as a refund
+    const expectedRefund = Number(c.amount || 0) - Number(c.spent || 0);
+    const actualRefunded = Number(c.refund || 0);
+    const remainingRefundOwed = expectedRefund - actualRefunded;
+    
+    return sum + (remainingRefundOwed > 0 ? remainingRefundOwed : 0);
+  }, 0);
+
+// 4. COA Submitted (Total amount of cash completely accounted for and turned over to COA)
+const coaSubmitted = cashAdvances
+  .filter((c) => c.date_submitted_to_coa !== null && c.date_submitted_to_coa !== undefined)
+  .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+
+// 4. AUDIT BREAKDOWN: Partially Proven Cash (Receipts submitted but file not closed)
+const partiallyProvenCash = totalPendingCash - actualCashAtRisk;
   return (
       <div className="space-y-6">
       {/* ================= HEADER ================= */}
@@ -461,7 +510,142 @@ const handleDeleteUser = async (id) => {
         initialData={selectedOfficial}
         key={selectedOfficial?.id || "official-creation"}
       />
+    <div className="space-y-6">
+  {/* TOP LEVEL CASH BANNER CARDS */}
+  <div className="grid grid-cols-3 gap-4 mb-6">
+    <div className="p-4 bg-[#DAA5F6] border border-green-200 rounded-lg">
+      <p className="text-xs text-blackfont-medium uppercase">Fully Audited & Settled</p>
+      <p className="text-2xl font-bold text-green-900">${settledCash.toLocaleString()}</p>
     </div>
+    <div className="p-4 bg-[#DAA5F6] border border-orange-200 rounded-lg">
+      <p className="text-xs text-blackfont-medium uppercase">Partially Proven Cash</p>
+      <p className="text-2xl font-bold text-orange-900">${partiallyProvenCash.toLocaleString()}</p>
+    </div>
+    <div className="p-4 bg-[#DAA5F6] border-red-200 rounded-lg">
+      <p className="text-xs text-red-700 font-medium uppercase">Net Cash Exposure (At Risk)</p>
+      <p className="text-2xl font-bold text-red-900">${actualCashAtRisk.toLocaleString()}</p>
+    </div>
+  </div>
+
+  {/* THE CHARTS */}
+  <div className="flex gap-8 justify-center p-6 bg-white rounded-lg shadow-sm">
+    
+    {/* CHART 1: WHERE IS THE TOTAL ADVANCED CASH? */}
+    <div className="flex flex-col items-center">
+      <h3 className="font-bold text-lg mb-2 text-gray-800">Total Advanced Cash Allocation</h3>
+      <p className="text-xs text-gray-500 mb-4">Tracking total cash distributions</p>
+
+      <PieChart
+        series={[
+          {
+            data: [
+              { id: 0, value: settledCash, label: 'Settled Cash', color: '#22c55e' },
+              { id: 1, value: totalPendingCash, label: 'Pending Cash Out', color: '#ef4444' },
+            ],
+            innerRadius: 60,
+            outerRadius: 100,
+            arcLabel: (item) => `$${item.value.toLocaleString()}` // Shows cash value on chart slices
+          },
+        ]}
+        width={450}
+        height={300}
+      />
+    </div>
+
+    {/* CHART 2: OUTSTANDING CASH RISK EXPOSURE */}
+    <div className="flex flex-col items-center">
+      <h3 className="font-bold text-lg mb-2 text-gray-800">Pending Cash Breakdown</h3>
+      <p className="text-xs text-gray-500 mb-4">Analyzing the unliquidated status of open advances</p>
+
+      <PieChart
+        series={[
+          {
+            data: [
+              { id: 0, value: partiallyProvenCash, label: 'Backed by Receipts', color: '#3b82f6' }, // Blue
+              { id: 1, value: actualCashAtRisk, label: 'Unaccounted Cash (High Risk)', color: '#991b1b' }, // Dark Red
+            ],
+            innerRadius: 60,
+            outerRadius: 100,
+            arcLabel: (item) => `$${item.value.toLocaleString()}`
+          },
+        ]}
+        width={450}
+        height={300}
+      />
+    </div>
+
+  </div>
+</div>
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+  
+  {/* Card 1: Total Outstanding */}
+  <div className="bg-white border border-blue-100 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-blue-600">Total Outstanding</span>
+        <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg text-sm">💵</span>
+      </div>
+      <h3 className="text-2xl font-bold text-gray-900">
+        ₱{totalOutstanding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      </h3>
+    </div>
+    <p className="text-xs text-gray-500 mt-3 pt-2 border-t border-gray-50">
+      Active cash distributions out in the field
+    </p>
+  </div>
+
+  {/* Card 2: Pending Liquidations */}
+  <div className="bg-white border border-red-100 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-red-600">Pending Liquidations</span>
+        <span className="p-1.5 bg-red-50 text-red-600 rounded-lg text-sm">⚠️</span>
+      </div>
+      <h3 className="text-2xl font-bold text-gray-900">
+        ₱{pendingLiquidations.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      </h3>
+    </div>
+    <p className="text-xs text-gray-500 mt-3 pt-2 border-t border-gray-50">
+      Unaccounted net financial exposure risk
+    </p>
+  </div>
+
+  {/* Card 3: Refund Due */}
+  <div className="bg-white border border-amber-100 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-amber-600">Refund Due</span>
+        <span className="p-1.5 bg-amber-50 text-amber-600 rounded-lg text-sm">🔄</span>
+      </div>
+      <h3 className="text-2xl font-bold text-gray-900">
+        ₱{refundDue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      </h3>
+    </div>
+    <p className="text-xs text-gray-500 mt-3 pt-2 border-t border-gray-50">
+      Unreturned remaining balances owed
+    </p>
+  </div>
+
+  {/* Card 4: COA Submitted */}
+  <div className="bg-white border border-green-100 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-green-600">COA Submitted</span>
+        <span className="p-1.5 bg-green-50 text-green-700 rounded-lg text-sm">📋</span>
+      </div>
+      <h3 className="text-2xl font-bold text-gray-900">
+        ₱{coaSubmitted.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      </h3>
+    </div>
+    <p className="text-xs text-gray-500 mt-3 pt-2 border-t border-gray-50">
+      Cleared accounts submitted to audit
+    </p>
+  </div>
+
+</div>
+  
+    </div>
+    
   );
 }
 

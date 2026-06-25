@@ -14,9 +14,10 @@ app.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
   try {
-    const [rows] = await db.query("SELECT * FROM users WHERE username = ?", [
-      username,
-    ]);
+    const [rows] = await db.query(
+      "SELECT * FROM users WHERE username = ?",
+      [username]
+    );
 
     if (rows.length === 0) {
       return res.status(401).json({ message: "User not found" });
@@ -30,7 +31,15 @@ app.post("/login", async (req, res) => {
 
     res.json({
       message: "Login successful",
-      user,
+      user: {
+        id: user.id,
+        username: user.username,
+        descrip: user.descrip,
+        role: user.role,
+        image: user.image
+          ? user.image.toString("base64")
+          : null,
+      },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -106,9 +115,6 @@ function validateMoney(amount, spent) {
     return "Spent must be a valid number greater than or equal to 0.";
   }
 
-  if (spent > amount) {
-    return "Spent cannot be greater than Amount.";
-  }
 
   return null;
 }
@@ -531,10 +537,42 @@ app.delete("/api/users/:id", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-app.get("/onlyoneuser", async (req, res)=> {
+app.get("/specific/onlyoneuser/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
 
+    const [rows] = await db.query(
+      `SELECT
+         id,
+         username,
+         descrip,
+         role,
+         image
+       FROM users
+       WHERE id = ?`,
+      [id]
+    );
 
-})
+    if (rows.length === 0) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    const user = rows[0];
+
+    res.json({
+      ...user,
+      image: user.image
+        ? Buffer.from(user.image).toString("base64")
+        : null,
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+});
 app.get("/onlyoneCash_Advances", async (req, res)=> {
 
   
