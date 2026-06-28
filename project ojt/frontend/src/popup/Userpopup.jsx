@@ -1,24 +1,33 @@
 import { useState, useEffect } from "react";
+import axios from "axios";
 
 function UserModal({ isOpen, onClose, onSubmit, initialData = null }) {
   const [formData, setFormData] = useState({
     username: "",
     password_hash: "",
     role: "user",
+    descrip: "",
   });
+  const [preview, setPreview] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
 
   useEffect(() => {
     if (initialData) {
       setFormData({
         username: initialData.username || "",
-        password_hash: "", // Hidden/not updated on PUT route
+        password_hash: "",
         role: initialData.role || "user",
+        descrip: initialData.descrip || "",
       });
+      if (initialData.image) {
+        setPreview(`data:image/jpeg;base64,${initialData.image}`);
+      }
     } else {
       setFormData({
         username: "",
         password_hash: "",
         role: "user",
+        descrip: "",
       });
     }
   }, [isOpen, initialData]);
@@ -32,9 +41,21 @@ function UserModal({ isOpen, onClose, onSubmit, initialData = null }) {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    setSelectedFile(file);
+    setPreview(URL.createObjectURL(file));
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    await onSubmit(formData);
+
+    if (selectedFile && initialData?.id) {
+      const formDataUpload = new FormData();
+      formDataUpload.append("image", selectedFile);
+      await axios.post(`http://localhost:5000/upload-image/${initialData.id}`, formDataUpload);
+    }
   };
 
   return (
@@ -45,12 +66,11 @@ function UserModal({ isOpen, onClose, onSubmit, initialData = null }) {
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Username Field */}
+          {/* Username */}
           <div>
             <label className="text-xs text-gray-500 font-medium">Username</label>
             <input
               name="username"
-              placeholder="Enter unique username"
               value={formData.username}
               onChange={handleChange}
               className="w-full border p-2 rounded mt-1"
@@ -58,14 +78,13 @@ function UserModal({ isOpen, onClose, onSubmit, initialData = null }) {
             />
           </div>
 
-          {/* Password Field - ONLY visible during creation */}
+          {/* Password - only on create */}
           {!initialData && (
             <div>
-              <label className="text-xs text-gray-500 font-medium">Password Hash / Plain Password</label>
+              <label className="text-xs text-gray-500 font-medium">Password</label>
               <input
                 type="password"
                 name="password_hash"
-                placeholder="Enter account password"
                 value={formData.password_hash}
                 onChange={handleChange}
                 className="w-full border p-2 rounded mt-1"
@@ -74,9 +93,9 @@ function UserModal({ isOpen, onClose, onSubmit, initialData = null }) {
             </div>
           )}
 
-          {/* Role Field - Enforcing strict ENUM options */}
+          {/* Role */}
           <div>
-            <label className="text-xs text-gray-500 font-medium">System Access Role</label>
+            <label className="text-xs text-gray-500 font-medium">Role</label>
             <select
               name="role"
               value={formData.role}
@@ -88,7 +107,32 @@ function UserModal({ isOpen, onClose, onSubmit, initialData = null }) {
             </select>
           </div>
 
-          {/* Action Buttons */}
+          {/* Description */}
+          <div>
+            <label className="text-xs text-gray-500 font-medium">Description</label>
+            <input
+              name="descrip"
+              value={formData.descrip}
+              onChange={handleChange}
+              className="w-full border p-2 rounded mt-1"
+              required
+            />
+          </div>
+
+          {/* Image Upload */}
+          <div>
+            <label className="text-xs text-gray-500 font-medium">Profile Image</label>
+            <input type="file" accept="image/*" onChange={handleFileChange} />
+            {preview && (
+              <img
+                src={preview}
+                alt="Preview"
+                className="mt-2 w-24 h-24 object-cover rounded"
+              />
+            )}
+          </div>
+
+          {/* Buttons */}
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
@@ -97,7 +141,6 @@ function UserModal({ isOpen, onClose, onSubmit, initialData = null }) {
             >
               Cancel
             </button>
-
             <button
               type="submit"
               className="bg-blue-600 text-white px-4 py-2 rounded"

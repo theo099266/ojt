@@ -15,7 +15,7 @@ function Dashboard() {
   const [showUserModal, setShowUserModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const fetchData = () => {
-    fetch("http://localhost:3000/all")
+    fetch("http://localhost:5000/all")
       .then((res) => res.json())
       .then((data) => {
         setCashAdvances(data.cashAdvances || []);
@@ -47,7 +47,7 @@ function Dashboard() {
 
     const interval = setInterval(() => {
       fetchData(); // auto refresh
-    }, 3000); // every 3 seconds
+    }, 5000); // every 3 seconds
 
     return () => clearInterval(interval); // cleanup
   }, []);
@@ -55,8 +55,8 @@ const handleOfficialSubmit = async (formData) => {
   const isEdit = !!selectedOfficial;
 
   const url = isEdit
-    ? `http://localhost:3000/api/officials/${selectedOfficial.id}`
-    : "http://localhost:3000/api/officials";
+    ? `http://localhost:5000/api/officials/${selectedOfficial.id}`
+    : "http://localhost:5000/api/officials";
 
   const method = isEdit ? "PUT" : "POST";
 
@@ -73,8 +73,8 @@ const handleUserSubmit = async (formData) => {
   try {
     const isEdit = !!selectedUser;
     const url = isEdit
-      ? `http://localhost:3000/api/users/${selectedUser.id}`
-      : "http://localhost:3000/api/users";
+      ? `http://localhost:5000/api/users/${selectedUser.id}`
+      : "http://localhost:5000/api/users";
 
     const method = isEdit ? "PUT" : "POST";
 
@@ -99,7 +99,7 @@ const handleDeleteUser = async (id) => {
   if (!window.confirm("Are you sure you want to completely remove this user account?")) return;
 
   try {
-    const res = await fetch(`http://localhost:3000/api/users/${id}`, {
+    const res = await fetch(`http://localhost:5000/api/users/${id}`, {
       method: "DELETE",
     });
 
@@ -115,8 +115,8 @@ const handleDeleteUser = async (id) => {
     try {
       const isEdit = !!selectedCashAdvance;
       const url = isEdit
-        ? `http://localhost:3000/cash-advances/${selectedCashAdvance.id}`
-        : "http://localhost:3000/cash-advances";
+        ? `http://localhost:5000/cash-advances/${selectedCashAdvance.id}`
+        : "http://localhost:5000/cash-advances";
 
       const method = isEdit ? "PUT" : "POST";
 
@@ -171,7 +171,7 @@ const handleDeleteUser = async (id) => {
 
     try {
       const response = await fetch(
-        `http://localhost:3000/cash-advances/${id}`,
+        `http://localhost:5000/cash-advances/${id}`,
         {
           method: "DELETE",
         },

@@ -9,6 +9,12 @@ const app = express();
 // middleware
 app.use(cors());
 app.use(express.json());
+const multer = require("multer");
+
+// Store uploaded files in memory (Buffer)
+const upload = multer({
+  storage: multer.memoryStorage(),
+});
 
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
@@ -444,7 +450,7 @@ app.delete("/api/officials/:id", async (req, res) => {
   }
 });
 app.post("/api/users", async (req, res) => {
-  const { username, password_hash, role } = req.body;
+  const { username, password_hash, role, descrip = "" } = req.body;
 
   // 1. Validate required fields
   if (!username || !password_hash) {
@@ -463,8 +469,8 @@ app.post("/api/users", async (req, res) => {
 
   try {
     // 3. Insert into the correct 'users' table with the correct columns
-    const query = "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)";
-    const values = [username, password_hash, userRole];
+    const query = "INSERT INTO users (username, password_hash, role, descrip) VALUES (?, ?, ?, ?)";
+    const values = [username, password_hash, userRole, descrip];
 
     const [result] = await db.execute(query, values);
 
@@ -483,23 +489,19 @@ app.post("/api/users", async (req, res) => {
 });
 app.put("/api/users/:id", async (req, res) => {
   const { id } = req.params;
-  const { username, role } = req.body;
+  const { username, role, descrip } = req.body;
 
   // 1. Strict Validation: Only allow 'admin' or 'user'
-  const allowedRoles = ['admin', 'user'];
+  const allowedRoles = ["admin", "user"];
   if (role && !allowedRoles.includes(role)) {
-    return res.status(400).json({ 
-      error: `Invalid role. Allowed values are strictly: ${allowedRoles.join(', ')}` 
+    return res.status(400).json({
+      error: `Invalid role. Allowed values are strictly: ${allowedRoles.join(", ")}`
     });
   }
 
   try {
     // 2. Verify if the user exists
-    const [rows] = await db.execute(
-      "SELECT * FROM users WHERE id = ?",
-      [id]
-    );
-
+    const [rows] = await db.execute("SELECT * FROM users WHERE id = ?", [id]);
     if (rows.length === 0) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -507,11 +509,12 @@ app.put("/api/users/:id", async (req, res) => {
     // 3. Fallback to existing database values if fields aren't provided
     const updatedUsername = username ?? rows[0].username;
     const updatedRole = role ?? rows[0].role;
+    const updatedDescrip = descrip ?? rows[0].descrip;
 
     // 4. Update the database
     await db.execute(
-      "UPDATE users SET username = ?, role = ? WHERE id = ?",
-      [updatedUsername, updatedRole, id]
+      "UPDATE users SET username = ?, role = ?, descrip = ? WHERE id = ?",
+      [updatedUsername, updatedRole, updatedDescrip, id]
     );
 
     res.status(200).json({ message: "User updated successfully" });
@@ -519,6 +522,7 @@ app.put("/api/users/:id", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 app.delete("/api/users/:id", async (req, res) => {
   const { id } = req.params;
 
@@ -590,6 +594,37 @@ try {
     });
   }
 })
+// Upload image
+app.post("/upload-image/:id", upload.single("image"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No image uploaded" });
+    }
+    await db.query("UPDATE users SET image=? WHERE id=?", [
+      req.file.buffer,
+      req.params.id,
+    ]);
+    res.json({ message: "Image uploaded successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update user (username, role, descrip)
+app.put("/users/:id", async (req, res) => {
+  try {
+    const { username, role, descrip } = req.body;
+    await db.query(
+      "UPDATE users SET username=?, role=?, descrip=? WHERE id=?",
+      [username, role, descrip, req.params.id]
+    );
+    res.json({ message: "User updated successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
 app.listen(process.env.PORT, () => {
   console.log("Server running on port " + process.env.PORT);
 });
