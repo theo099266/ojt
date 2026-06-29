@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-
 function CashAdvanceModal({ isOpen, onClose, onSubmit, initialData = null }) {
   const [formData, setFormData] = useState({
     fund: "",
@@ -12,31 +11,29 @@ function CashAdvanceModal({ isOpen, onClose, onSubmit, initialData = null }) {
     refund: "0",
     status: "Pending",
   });
+
+  const [selectedFile, setSelectedFile] = useState(null);
   const handleChange = (e) => {
-  const { name, value } = e.target;
+    const { name, value } = e.target;
 
-  setFormData((prev) => {
-    const updated = {
-      ...prev,
-      [name]: value,
-    };
+    setFormData((prev) => {
+      const updated = {
+        ...prev,
+        [name]: value,
+      };
 
-    // Only auto-calculate when amount or spent changes
-    if (name === "amount" || name === "spent") {
-      const amount = Number(
-        name === "amount" ? value : updated.amount
-      ) || 0;
+      // Only auto-calculate when amount or spent changes
+      if (name === "amount" || name === "spent") {
+        const amount = Number(name === "amount" ? value : updated.amount) || 0;
 
-      const spent = Number(
-        name === "spent" ? value : updated.spent
-      ) || 0;
+        const spent = Number(name === "spent" ? value : updated.spent) || 0;
 
-      updated.refund = amount - spent;
-    }
+        updated.refund = amount - spent;
+      }
 
-    return updated;
-  });
-};
+      return updated;
+    });
+  };
 
   // Fixed syntax error and properly tracked dependency array
   useEffect(() => {
@@ -61,8 +58,20 @@ function CashAdvanceModal({ isOpen, onClose, onSubmit, initialData = null }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+
+    const data = new FormData();
+    Object.keys(formData).forEach((key) => {
+      data.append(key, formData[key]);
+    });
+    if (selectedFile) {
+      data.append("attachment", selectedFile);
+// field name must match multer
+    }
+
+    onSubmit(data); // this should call axios.post to your backend
   };
+
+
 
   return (
     <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
@@ -75,7 +84,7 @@ function CashAdvanceModal({ isOpen, onClose, onSubmit, initialData = null }) {
           <input
             name="fund"
             placeholder="Fund"
-            value={formData.fund}
+            value={formData.fund || ""} 
             onChange={handleChange}
             className="w-full border p-2 rounded"
             required
@@ -155,12 +164,12 @@ function CashAdvanceModal({ isOpen, onClose, onSubmit, initialData = null }) {
             <div>
               <label className="text-xs text-gray-500">Refund</label>
               <input
-  type="number"
-  name="refund"
-  value={formData.refund}
-  onChange={handleChange}
-  className="w-full border p-2 rounded"
-/>
+                type="number"
+                name="refund"
+                value={formData.refund}
+                onChange={handleChange}
+                className="w-full border p-2 rounded"
+              />
             </div>
           </div>
 
@@ -179,6 +188,19 @@ function CashAdvanceModal({ isOpen, onClose, onSubmit, initialData = null }) {
             >
               {initialData ? "Update" : "Create"}
             </button>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Attachment (PDF, DOC, DOCX)
+            </label>
+
+            <input
+              type="file"
+              name="attachment"
+              accept=".pdf,.doc,.docx"
+              onChange={(e) => setSelectedFile(e.target.files[0])}
+              className="w-full border p-2 rounded"
+            />
           </div>
         </form>
       </div>

@@ -5,7 +5,7 @@ function UserModal({ isOpen, onClose, onSubmit, initialData = null }) {
   const [formData, setFormData] = useState({
     username: "",
     password_hash: "",
-    role: "user",
+    role: "",
     descrip: "",
   });
   const [preview, setPreview] = useState(null);

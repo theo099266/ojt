@@ -3,27 +3,49 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const db = require("./db");
-
 const app = express();
 
 // middleware
 app.use(cors());
 app.use(express.json());
 const multer = require("multer");
+const path = require("path");
 
-// Store uploaded files in memory (Buffer)
-const upload = multer({
-  storage: multer.memoryStorage(),
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/");
+  },
+  filename: (req, file, cb) => {
+    cb(null, file.originalname + "---" + Date.now());
+  },
 });
 
+const fileFilter = (req, file, cb) => {
+  const allowed = /\.(pdf|doc|docx)$/;
+  const ext = path.extname(file.originalname).toLowerCase();
+
+  if (allowed.test(ext)) {
+    cb(null, true);
+  } else {
+    cb(new Error("Only PDF and Word files are allowed."));
+  }
+};
+const uploadImage = multer({ storage: multer.memoryStorage() });
+
+const upload = multer({
+  storage,
+  fileFilter,
+});
+module.exports = upload;
+
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
   try {
-    const [rows] = await db.query(
-      "SELECT * FROM users WHERE username = ?",
-      [username]
-    );
+    const [rows] = await db.query("SELECT * FROM users WHERE username = ?", [
+      username,
+    ]);
 
     if (rows.length === 0) {
       return res.status(401).json({ message: "User not found" });
@@ -42,9 +64,7 @@ app.post("/login", async (req, res) => {
         username: user.username,
         descrip: user.descrip,
         role: user.role,
-        image: user.image
-          ? user.image.toString("base64")
-          : null,
+        image: user.image ? user.image.toString("base64") : null,
       },
     });
   } catch (err) {
@@ -61,31 +81,39 @@ app.get("/users", async (req, res) => {
 });
 app.get("/all", async (req, res) => {
   try {
-    const [users] = await db.query("SELECT id, password_hash, username, role FROM users");
+    const [usersRaw] = await db.query(
+      "SELECT id, username, role, descrip, image FROM users",
+    );
+
+    const users = usersRaw.map((user) => ({
+      ...user,
+      image: user.image ? Buffer.from(user.image).toString("base64") : null,
+    }));
 
     const [bondedOfficials] = await db.query(
       "SELECT id, name, is_available FROM bonded_officials",
     );
 
     const [cashAdvances] = await db.query(`
-            SELECT
-            ca.id,
-    ca.fund,
-    ca.dv_date,
-    ca.dv_number,
-    bo.name AS bonded_official,
-    ca.accountable_official,
-    ca.amount,
-    ca.spent,
-    ca.refund,
-    ca.status,
-    u.username AS created_by,
-    ca.created_at
+    SELECT
+        ca.id,
+        ca.fund,
+        ca.dv_date,
+        ca.dv_number,
+        bo.name AS bonded_official,
+        ca.accountable_official,
+        ca.amount,
+        ca.spent,
+        ca.refund,
+        ca.status,
+        ca.file_path,
+        u.username AS created_by,
+        ca.created_at
     FROM cash_advances ca
     LEFT JOIN bonded_officials bo
-    ON ca.bonded_official_id = bo.id
+        ON ca.bonded_official_id = bo.id
     LEFT JOIN users u
-    ON ca.created_by = u.id
+        ON ca.created_by = u.id
     ORDER BY ca.created_at DESC
 `);
 
@@ -106,9 +134,27 @@ function toNumber(value) {
   const n = Number(value);
   return Number.isFinite(n) ? n : NaN;
 }
+async function uploadFile(file) {
+  const formData = new FormData();
+  formData.append("file_path", file); // "file" must match the multer field name
+
+  try {
+    const res = await axios.post("/upload", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    console.log("Uploaded:", res.data);
+  } catch (err) {
+    console.error("Upload failed:", err);
+  }
+}
 
 async function existsInTable(table, id) {
-  const [rows] = await db.query(`SELECT id FROM ${table} WHERE id = ? LIMIT 1`, [id]);
+  const [rows] = await db.query(
+    `SELECT id FROM ${table} WHERE id = ? LIMIT 1`,
+    [id],
+  );
   return rows.length > 0;
 }
 
@@ -121,10 +167,9 @@ function validateMoney(amount, spent) {
     return "Spent must be a valid number greater than or equal to 0.";
   }
 
-
   return null;
 }
-app.post("/cash-advances", async (req, res) => {
+app.post("/cash-advances", upload.single("attachment"), async (req, res) => {
   try {
     const {
       fund,
@@ -148,7 +193,7 @@ app.post("/cash-advances", async (req, res) => {
       remarks = null,
       date_submitted_to_coa = null,
     } = req.body;
-
+    const file_path = req.file ? req.file.filename : null;
     const amountNum = toNumber(amount);
     const spentNum = toNumber(spent);
     const refundNum = toNumber(refund);
@@ -179,7 +224,9 @@ app.post("/cash-advances", async (req, res) => {
     }
 
     if (!["Done", "Ongoing"].includes(status)) {
-      return res.status(400).json({ error: "Status must be either Done or Ongoing." });
+      return res
+        .status(400)
+        .json({ error: "Status must be either Done or Ongoing." });
     }
 
     const [result] = await db.query(
@@ -203,8 +250,9 @@ app.post("/cash-advances", async (req, res) => {
         status,
         remarks,
         date_submitted_to_coa,
-        created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        created_by,
+        file_path
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         fund,
         dv_date || null,
@@ -226,7 +274,8 @@ app.post("/cash-advances", async (req, res) => {
         remarks,
         date_submitted_to_coa || null,
         createdByNum,
-      ]
+        file_path,
+      ],
     );
 
     return res.status(201).json({
@@ -237,7 +286,7 @@ app.post("/cash-advances", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
-app.put("/cash-advances/:id", async (req, res) => {
+app.put("/cash-advances/:id", upload.single("attachment"), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -284,7 +333,7 @@ app.put("/cash-advances/:id", async (req, res) => {
 
     const [existingRows] = await db.query(
       "SELECT id FROM cash_advances WHERE id = ? LIMIT 1",
-      [idNum]
+      [idNum],
     );
 
     if (existingRows.length === 0) {
@@ -297,7 +346,9 @@ app.put("/cash-advances/:id", async (req, res) => {
     }
 
     if (!["Done", "Ongoing"].includes(status)) {
-      return res.status(400).json({ error: "Status must be either Done or Ongoing." });
+      return res
+        .status(400)
+        .json({ error: "Status must be either Done or Ongoing." });
     }
 
     const [result] = await db.query(
@@ -344,7 +395,7 @@ app.put("/cash-advances/:id", async (req, res) => {
         remarks,
         date_submitted_to_coa || null,
         idNum,
-      ]
+      ],
     );
 
     return res.json({
@@ -364,10 +415,9 @@ app.delete("/cash-advances/:id", async (req, res) => {
       return res.status(400).json({ error: "Invalid cash advance id." });
     }
 
-    const [result] = await db.query(
-      "DELETE FROM cash_advances WHERE id = ?",
-      [idNum]
-    );
+    const [result] = await db.query("DELETE FROM cash_advances WHERE id = ?", [
+      idNum,
+    ]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Cash advance not found." });
@@ -411,7 +461,7 @@ app.put("/api/officials/:id", async (req, res) => {
   try {
     const [rows] = await db.execute(
       "SELECT * FROM bonded_officials WHERE id = ?",
-      [id]
+      [id],
     );
 
     if (rows.length === 0) {
@@ -423,7 +473,7 @@ app.put("/api/officials/:id", async (req, res) => {
 
     await db.execute(
       "UPDATE bonded_officials SET name = ?, is_available = ? WHERE id = ?",
-      [updatedName, updatedAvailability, id]
+      [updatedName, updatedAvailability, id],
     );
 
     res.status(200).json({ message: "Official updated successfully" });
@@ -437,7 +487,7 @@ app.delete("/api/officials/:id", async (req, res) => {
   try {
     const [result] = await db.execute(
       "DELETE FROM bonded_officials WHERE id = ?",
-      [id]
+      [id],
     );
 
     if (result.affectedRows === 0) {
@@ -454,22 +504,25 @@ app.post("/api/users", async (req, res) => {
 
   // 1. Validate required fields
   if (!username || !password_hash) {
-    return res.status(400).json({ error: "Username and password_hash are required" });
+    return res
+      .status(400)
+      .json({ error: "Username and password_hash are required" });
   }
 
   // 2. Strict Role Validation (Defaulting to 'user' if not provided)
-  const allowedRoles = ['admin', 'user'];
-  const userRole = role ?? 'user'; 
+  const allowedRoles = ["admin", "user"];
+  const userRole = role ?? "user";
 
   if (!allowedRoles.includes(userRole)) {
-    return res.status(400).json({ 
-      error: `Invalid role. Allowed values are strictly: ${allowedRoles.join(', ')}` 
+    return res.status(400).json({
+      error: `Invalid role. Allowed values are strictly: ${allowedRoles.join(", ")}`,
     });
   }
 
   try {
     // 3. Insert into the correct 'users' table with the correct columns
-    const query = "INSERT INTO users (username, password_hash, role, descrip) VALUES (?, ?, ?, ?)";
+    const query =
+      "INSERT INTO users (username, password_hash, role, descrip) VALUES (?, ?, ?, ?)";
     const values = [username, password_hash, userRole, descrip];
 
     const [result] = await db.execute(query, values);
@@ -481,7 +534,7 @@ app.post("/api/users", async (req, res) => {
     });
   } catch (error) {
     // Handle ER_DUP_ENTRY if the username already exists (since username is UNIQUE)
-    if (error.code === 'ER_DUP_ENTRY') {
+    if (error.code === "ER_DUP_ENTRY") {
       return res.status(400).json({ error: "Username already exists" });
     }
     res.status(500).json({ error: error.message });
@@ -495,7 +548,7 @@ app.put("/api/users/:id", async (req, res) => {
   const allowedRoles = ["admin", "user"];
   if (role && !allowedRoles.includes(role)) {
     return res.status(400).json({
-      error: `Invalid role. Allowed values are strictly: ${allowedRoles.join(", ")}`
+      error: `Invalid role. Allowed values are strictly: ${allowedRoles.join(", ")}`,
     });
   }
 
@@ -514,7 +567,7 @@ app.put("/api/users/:id", async (req, res) => {
     // 4. Update the database
     await db.execute(
       "UPDATE users SET username = ?, role = ?, descrip = ? WHERE id = ?",
-      [updatedUsername, updatedRole, updatedDescrip, id]
+      [updatedUsername, updatedRole, updatedDescrip, id],
     );
 
     res.status(200).json({ message: "User updated successfully" });
@@ -527,10 +580,7 @@ app.delete("/api/users/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
-    const [result] = await db.execute(
-      "DELETE FROM users WHERE id = ?",
-      [id]
-    );
+    const [result] = await db.execute("DELETE FROM users WHERE id = ?", [id]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "User not found" });
@@ -554,7 +604,7 @@ app.get("/specific/onlyoneuser/:id", async (req, res) => {
          image
        FROM users
        WHERE id = ?`,
-      [id]
+      [id],
     );
 
     if (rows.length === 0) {
@@ -567,9 +617,7 @@ app.get("/specific/onlyoneuser/:id", async (req, res) => {
 
     res.json({
       ...user,
-      image: user.image
-        ? Buffer.from(user.image).toString("base64")
-        : null,
+      image: user.image ? Buffer.from(user.image).toString("base64") : null,
     });
   } catch (err) {
     res.status(500).json({
@@ -577,14 +625,11 @@ app.get("/specific/onlyoneuser/:id", async (req, res) => {
     });
   }
 });
-app.get("/onlyoneCash_Advances", async (req, res)=> {
-
-  
-})
-app.get("/onlyoneBonded_Officials", async (req, res)=> {
-try {
+app.get("/onlyoneCash_Advances", async (req, res) => {});
+app.get("/onlyoneBonded_Officials", async (req, res) => {
+  try {
     const [bondedOfficials] = await db.query(
-      "SELECT id, name, is_available FROM bonded_officials ORDER BY id ASC"
+      "SELECT id, name, is_available FROM bonded_officials ORDER BY id ASC",
     );
 
     res.json(bondedOfficials);
@@ -593,22 +638,14 @@ try {
       error: err.message,
     });
   }
-})
-// Upload image
-app.post("/upload-image/:id", upload.single("image"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ message: "No image uploaded" });
-    }
-    await db.query("UPDATE users SET image=? WHERE id=?", [
-      req.file.buffer,
-      req.params.id,
-    ]);
-    res.json({ message: "Image uploaded successfully" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
+});
+app.post("/upload-image/:id", uploadImage.single("image"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ message: "No image uploaded" });
+  await db.query("UPDATE users SET image=? WHERE id=?", [
+    req.file.buffer,
+    req.params.id,
+  ]);
+  res.json({ message: "Image uploaded successfully" });
 });
 
 // Update user (username, role, descrip)
@@ -617,7 +654,7 @@ app.put("/users/:id", async (req, res) => {
     const { username, role, descrip } = req.body;
     await db.query(
       "UPDATE users SET username=?, role=?, descrip=? WHERE id=?",
-      [username, role, descrip, req.params.id]
+      [username, role, descrip, req.params.id],
     );
     res.json({ message: "User updated successfully" });
   } catch (err) {
