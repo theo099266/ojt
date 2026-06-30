@@ -1,8 +1,9 @@
 import { Routes, Route } from "react-router-dom";
 
-import Login from "./Login";
-import Dashboard from "./Dashboard";
-
+import Login from "./auth/Login";
+import Dashboard from "./navigation_direction/Dashboard";
+import Reporting from "./navigation_direction/Reporting";
+import Logs  from "./navigation_direction/Logs";
 import DashboardLayout from "./layouts/DashboardLayout";
 
 function App() {
@@ -14,11 +15,8 @@ function App() {
       {/* Protected Layout */}
       <Route element={<DashboardLayout />}>
         <Route path="/dashboard" element={<Dashboard />} />
-
-        {/* Future Pages */}
-        {/* <Route path="/cash-advances" element={<CashAdvances />} /> */}
-        {/* <Route path="/reports" element={<Reports />} /> */}
-        {/* <Route path="/users" element={<Users />} /> */}
+        <Route path="/Reporting" element={<Reporting />} />
+        <Route path="/Logs" element={<Logs />} />
       </Route>
     </Routes>
   );

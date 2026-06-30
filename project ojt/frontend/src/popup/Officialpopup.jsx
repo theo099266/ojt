@@ -44,7 +44,9 @@ function OfficialModal({ isOpen, onClose, onSubmit, initialData = null }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-xs text-gray-500 font-medium">Full Name</label>
+            <label className="text-xs text-gray-500 font-medium">
+              Full Name
+            </label>
             <input
               name="name"
               placeholder="Official Full Name"
@@ -56,15 +58,22 @@ function OfficialModal({ isOpen, onClose, onSubmit, initialData = null }) {
           </div>
 
           <div>
-            <label className="text-xs text-gray-500 font-medium">Availability Status</label>
+            <label className="text-xs text-gray-500 font-medium">
+              Availability Status
+            </label>
             <select
               name="is_available"
-              value={formData.is_available.toString()}
-              onChange={handleChange}
+              value={formData.is_available ? "1" : "0"}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  is_available: e.target.value === "1",
+                })
+              }
               className="w-full border p-2 rounded mt-1"
             >
-              <option value="true">Available</option>
-              <option value="false">Unavailable</option>
+              <option value="1">Available</option>
+              <option value="0">Unavailable</option>
             </select>
           </div>
 

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import logo from "../assets/logo.png";
 import logo_bill from "../assets/logo bill.png";
+import logo_report from "../assets/logo_report.png";
+import logo_logs from "../assets/logs.png";
 import { FiCheck, FiX } from "react-icons/fi";
 export default function Sidebar() {
   const [bondedOfficials, setBondedOfficials] = useState([]);
@@ -103,25 +105,62 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <nav className="p-4">
-        <NavLink
-          to="/dashboard"
-          className={({ isActive }) =>
-            `flex items-center gap-3 p-3 rounded transition-colors ${
-              isActive
-                ? "bg-[#DAA5F6] text-black"
-                : "hover:bg-[#b741f7] hover:text-black"
-            }`
-          }
-        >
-          <img
-            src={logo_bill}
-            alt="Logo"
-            className="w-10 h-10 object-contain"
-          />
-          <span>Dashboard</span>
-        </NavLink>
-      </nav>
+      <nav className="flex flex-col gap-2 p-1">
+  <NavLink
+    to="/dashboard"
+    className={({ isActive }) =>
+      `flex items-center gap-2 p-3 rounded transition-colors ${
+        isActive ? "text-black" : "hover:text-white"
+      }`
+    }
+  >
+    <div className="w-8 h-8 flex items-center justify-center">
+      <img
+        src={logo_bill}
+        alt="Logo"
+        className="w-8 h-8 object-contain"
+      />
+    </div>
+    <span>Dashboard</span>
+  </NavLink>
+
+  <NavLink
+    to="/Reporting"
+    className={({ isActive }) =>
+      `flex items-center gap-2 p-3 rounded transition-colors ${
+        isActive ? "text-black" : "hover:text-white"
+      }`
+    }
+  >
+    <div className="w-8 h-5 flex items-center justify-center">
+      <img
+        src={logo_report}
+        alt="Logo2"
+        className="w-8 h-8 object-contain"
+      />
+    </div>
+    <span>Reports</span>
+  </NavLink>
+
+  <NavLink
+    to="/Logs"
+    className={({ isActive }) =>
+      `flex items-center gap-2 p-3 rounded transition-colors ${
+        isActive ? "text-black" : "hover:text-white"
+      }`
+    }
+  >
+    <div className="w-8 h-5 flex items-center justify-center">
+      <img
+        src={logo_logs}
+        alt="Logo3"
+        className="w-8 h-8 object-contain"
+      />
+    </div>
+    <span>Audit Logs</span>
+  </NavLink>
+</nav>
+
     </aside>
   );
 }

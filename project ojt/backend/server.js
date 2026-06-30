@@ -16,7 +16,7 @@ const storage = multer.diskStorage({
     cb(null, "uploads/");
   },
   filename: (req, file, cb) => {
-    cb(null, file.originalname + "---" + Date.now());
+    cb(null, Date.now() + "---" + file.originalname);
   },
 });
 
@@ -82,7 +82,7 @@ app.get("/users", async (req, res) => {
 app.get("/all", async (req, res) => {
   try {
     const [usersRaw] = await db.query(
-      "SELECT id, username, role, descrip, image FROM users",
+      "SELECT id, username,  password_hash ,role, descrip, image FROM users",
     );
 
     const users = usersRaw.map((user) => ({
@@ -136,7 +136,17 @@ function toNumber(value) {
 }
 async function uploadFile(file) {
   const formData = new FormData();
-  formData.append("file_path", file); // "file" must match the multer field name
+  formData.append("fund", fund);
+  formData.append("dv_date", dv_date);
+  formData.append("dv_number", dv_number);
+  formData.append("bonded_official_id", bondedOfficialId); // must be valid
+  formData.append("accountable_official", accountableOfficial);
+  formData.append("amount", amount);
+  formData.append("spent", spent || 0);
+  formData.append("refund", refund || 0);
+  formData.append("status", "Ongoing"); // must be Done or Ongoing
+  formData.append("created_by", userId); // REQUIRED for POST
+  formData.append("attachment", selectedFile);
 
   try {
     const res = await axios.post("/upload", formData, {
@@ -350,30 +360,19 @@ app.put("/cash-advances/:id", upload.single("attachment"), async (req, res) => {
         .status(400)
         .json({ error: "Status must be either Done or Ongoing." });
     }
+    const file_path = req.file ? req.file.filename : null;
 
     const [result] = await db.query(
       `UPDATE cash_advances
-       SET
-         fund = ?,
-         dv_date = ?,
-         dv_number = ?,
-         bonded_official_id = ?,
-         accountable_official = ?,
-         description = ?,
-         check_date = ?,
-         check_number = ?,
-         amount = ?,
-         spent = ?,
-         refund = ?,
-         rv_date = ?,
-         rv_number = ?,
-         deposit = ?,
-         liquidated_date = ?,
-         bur_number = ?,
-         status = ?,
-         remarks = ?,
-         date_submitted_to_coa = ?
-       WHERE id = ?`,
+      SET fund = ?,
+      dv_date = ?,
+      dv_number = ?,
+       bonded_official_id = ?,
+       accountable_official = ?, description = ?, check_date = ?, check_number = ?,
+       amount = ?, spent = ?, refund = ?, rv_date = ?, rv_number = ?, deposit = ?,
+       liquidated_date = ?, bur_number = ?, status = ?, remarks = ?, date_submitted_to_coa = ?,
+       file_path = COALESCE(?, file_path)   -- keep old if no new file
+   WHERE id = ?`,
       [
         fund,
         dv_date || null,
@@ -394,6 +393,7 @@ app.put("/cash-advances/:id", upload.single("attachment"), async (req, res) => {
         status,
         remarks,
         date_submitted_to_coa || null,
+        file_path,
         idNum,
       ],
     );
@@ -469,12 +469,16 @@ app.put("/api/officials/:id", async (req, res) => {
     }
 
     const updatedName = name ?? rows[0].name;
-    const updatedAvailability = is_available ?? rows[0].is_available;
+    const updatedAvailability =
+  typeof is_available === "boolean"
+    ? (is_available ? 1 : 0)
+    : rows[0].is_available;
 
-    await db.execute(
-      "UPDATE bonded_officials SET name = ?, is_available = ? WHERE id = ?",
-      [updatedName, updatedAvailability, id],
-    );
+await db.execute(
+  "UPDATE bonded_officials SET name = ?, is_available = ? WHERE id = ?",
+  [updatedName, updatedAvailability, id],
+);
+
 
     res.status(200).json({ message: "Official updated successfully" });
   } catch (error) {
@@ -502,44 +506,30 @@ app.delete("/api/officials/:id", async (req, res) => {
 app.post("/api/users", async (req, res) => {
   const { username, password_hash, role, descrip = "" } = req.body;
 
-  // 1. Validate required fields
   if (!username || !password_hash) {
-    return res
-      .status(400)
-      .json({ error: "Username and password_hash are required" });
+    return res.status(400).json({ error: "Username and password_hash are required" });
   }
 
-  // 2. Strict Role Validation (Defaulting to 'user' if not provided)
   const allowedRoles = ["admin", "user"];
   const userRole = role ?? "user";
-
   if (!allowedRoles.includes(userRole)) {
-    return res.status(400).json({
-      error: `Invalid role. Allowed values are strictly: ${allowedRoles.join(", ")}`,
-    });
+    return res.status(400).json({ error: `Invalid role. Allowed values: ${allowedRoles.join(", ")}` });
   }
 
   try {
-    // 3. Insert into the correct 'users' table with the correct columns
-    const query =
-      "INSERT INTO users (username, password_hash, role, descrip) VALUES (?, ?, ?, ?)";
+    const query = "INSERT INTO users (username, password_hash, role, descrip) VALUES (?, ?, ?, ?)";
     const values = [username, password_hash, userRole, descrip];
-
     const [result] = await db.execute(query, values);
 
-    // 4. Return clean user-specific success data
     res.status(201).json({
       message: "User created successfully",
       userId: result.insertId,
     });
   } catch (error) {
-    // Handle ER_DUP_ENTRY if the username already exists (since username is UNIQUE)
-    if (error.code === "ER_DUP_ENTRY") {
-      return res.status(400).json({ error: "Username already exists" });
-    }
     res.status(500).json({ error: error.message });
   }
 });
+
 app.put("/api/users/:id", async (req, res) => {
   const { id } = req.params;
   const { username, role, descrip } = req.body;
@@ -641,27 +631,34 @@ app.get("/onlyoneBonded_Officials", async (req, res) => {
 });
 app.post("/upload-image/:id", uploadImage.single("image"), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: "No image uploaded" });
+
   await db.query("UPDATE users SET image=? WHERE id=?", [
     req.file.buffer,
     req.params.id,
   ]);
+
   res.json({ message: "Image uploaded successfully" });
 });
 
-// Update user (username, role, descrip)
-app.put("/users/:id", async (req, res) => {
-  try {
-    const { username, role, descrip } = req.body;
-    await db.query(
-      "UPDATE users SET username=?, role=?, descrip=? WHERE id=?",
-      [username, role, descrip, req.params.id],
-    );
-    res.json({ message: "User updated successfully" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
+
+
+
+
+
+// // Update user (username, role, descrip)
+// app.put("/users/:id", async (req, res) => {
+//   try {
+//     const { username, role, descrip } = req.body;
+//     await db.query(
+//       "UPDATE users SET username=?, role=?, descrip=? WHERE id=?",
+//       [username, role, descrip, req.params.id],
+//     );
+//     res.json({ message: "User updated successfully" });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ error: err.message });
+//   }
+// });
 app.listen(process.env.PORT, () => {
   console.log("Server running on port " + process.env.PORT);
 });

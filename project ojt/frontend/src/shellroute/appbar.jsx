@@ -1,10 +1,18 @@
 import { useState } from "react";
 import { FiRefreshCw } from "react-icons/fi"; // optional, replace with inline SVG if you don't want react-icons
-
+import { useLocation } from "react-router-dom";
 export default function AppBar() {
   const [query, setQuery] = useState("");
   const [showIcons, setShowIcons] = useState(true);
   const user = JSON.parse(localStorage.getItem("user"));
+  const location = useLocation();
+
+  const titles = {
+    "/dashboard": "Cash Advance Dashboard",
+    "/Reporting": "REPORTING",
+    "/Logs": "AUDIT_LOGS",
+  };
+  const currentTitle = titles[location.pathname] || "Dashboard";
 
   function handleIconClick() {
     // hide both icons when either is clicked
@@ -26,7 +34,7 @@ export default function AppBar() {
 
   return (
     <header className="h-16 bg-white border-b flex items-center justify-start px-6 gap-4">
-      <h1 className="text-xl font-semibold">Cash Advance Dashboard</h1>
+      <h1 className="text-xl font-semibold">{currentTitle}</h1>
 
       <div className="flex items-center flex-1 ">
         {/* Search container */}
@@ -106,7 +114,7 @@ export default function AppBar() {
               type="button"
               onClick={handleReload}
               aria-label="Reload page"
-              className="ml-2 w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
+              className="ml-2 w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 relative z-20"
             >
               <FiRefreshCw className="w-5 h-5 text-gray-700" />
             </button>

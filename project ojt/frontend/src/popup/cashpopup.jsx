@@ -22,7 +22,6 @@ function CashAdvanceModal({ isOpen, onClose, onSubmit, initialData = null }) {
         [name]: value,
       };
 
-      // Only auto-calculate when amount or spent changes
       if (name === "amount" || name === "spent") {
         const amount = Number(name === "amount" ? value : updated.amount) || 0;
 
@@ -34,8 +33,6 @@ function CashAdvanceModal({ isOpen, onClose, onSubmit, initialData = null }) {
       return updated;
     });
   };
-
-  // Fixed syntax error and properly tracked dependency array
   useEffect(() => {
     if (initialData) {
       setFormData(initialData);
@@ -65,13 +62,12 @@ function CashAdvanceModal({ isOpen, onClose, onSubmit, initialData = null }) {
     });
     if (selectedFile) {
       data.append("attachment", selectedFile);
-// field name must match multer
+      // field name must match multer
     }
+    data.append("created_by", 1); // replace currentuser //////////////////
 
-    onSubmit(data); // this should call axios.post to your backend
+    onSubmit(data);
   };
-
-
 
   return (
     <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
@@ -84,7 +80,7 @@ function CashAdvanceModal({ isOpen, onClose, onSubmit, initialData = null }) {
           <input
             name="fund"
             placeholder="Fund"
-            value={formData.fund || ""} 
+            value={formData.fund || ""}
             onChange={handleChange}
             className="w-full border p-2 rounded"
             required
@@ -189,19 +185,44 @@ function CashAdvanceModal({ isOpen, onClose, onSubmit, initialData = null }) {
               {initialData ? "Update" : "Create"}
             </button>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Attachment (PDF, DOC, DOCX)
-            </label>
+          <div className="border rounded p-3">
+  <label className="block text-sm font-medium mb-2">
+    Attachment (PDF, DOC, DOCX)
+  </label>
 
-            <input
-              type="file"
-              name="attachment"
-              accept=".pdf,.doc,.docx"
-              onChange={(e) => setSelectedFile(e.target.files[0])}
-              className="w-full border p-2 rounded"
-            />
-          </div>
+  {/* File input */}
+  <input
+    type="file"
+    name="attachment"
+    accept=".pdf,.doc,.docx"
+    onChange={(e) => setSelectedFile(e.target.files[0])}
+    className="w-full"
+  />
+
+  {/* One box that shows either the existing file or the newly selected one */}
+  <div className="mt-3 border rounded bg-gray-50 p-2">
+    {selectedFile ? (
+      // Show newly chosen file
+      <span className="flex items-center gap-2">
+        📄 {selectedFile.name}
+      </span>
+    ) : initialData?.file_path ? (
+      // Show existing file from DB
+      <a
+        href={`http://localhost:5000/uploads/${initialData.file_path}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-blue-600 hover:underline flex items-center gap-2"
+      >
+        📄 {initialData.file_path.split("---")[1] || initialData.file_path}
+      </a>
+    ) : (
+      // Nothing chosen yet
+      <span className="text-gray-500">No file selected</span>
+    )}
+  </div>
+</div>
+
         </form>
       </div>
     </div>

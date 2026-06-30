@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 
-function UserModal({ isOpen, onClose, onSubmit, initialData = null }) {
+function UserModal({ isOpen, onClose, initialData = null }) {
   const [formData, setFormData] = useState({
     username: "",
     password_hash: "",
@@ -47,16 +47,51 @@ function UserModal({ isOpen, onClose, onSubmit, initialData = null }) {
     setPreview(URL.createObjectURL(file));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    await onSubmit(formData);
+ const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    if (selectedFile && initialData?.id) {
+  try {
+    let userId;
+
+    if (initialData?.id) {
+      // Editing existing user
+      const res = await fetch(`http://localhost:5000/api/users/${initialData.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Update failed");
+      userId = initialData.id;
+    } else {
+      // Creating new user
+      const res = await fetch("http://localhost:5000/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Creation failed");
+      userId = data.userId; // returned from backend
+    }
+
+    // Upload image if selected
+    if (selectedFile) {
       const formDataUpload = new FormData();
       formDataUpload.append("image", selectedFile);
-      await axios.post(`http://localhost:5000/upload-image/${initialData.id}`, formDataUpload);
+      await axios.post(`http://localhost:5000/upload-image/${userId}`, formDataUpload);
     }
-  };
+
+    // Close modal + refresh
+    onClose();
+  } catch (err) {
+    console.error("User Save error:", err);
+    alert(err.message);
+  }
+};
+
+
+
 
   return (
     <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
