@@ -10,7 +10,8 @@ app.use(cors());
 app.use(express.json());
 const multer = require("multer");
 const path = require("path");
-
+const fs = require("fs");
+const { PDFDocument } = require("pdf-lib");
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, "uploads/");
@@ -645,20 +646,97 @@ app.post("/upload-image/:id", uploadImage.single("image"), async (req, res) => {
 
 
 
-// // Update user (username, role, descrip)
-// app.put("/users/:id", async (req, res) => {
-//   try {
-//     const { username, role, descrip } = req.body;
-//     await db.query(
-//       "UPDATE users SET username=?, role=?, descrip=? WHERE id=?",
-//       [username, role, descrip, req.params.id],
-//     );
-//     res.json({ message: "User updated successfully" });
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ error: err.message });
-//   }
-// });
+// Update user (username, role, descrip)
+app.put("/users/:id", async (req, res) => {
+  try {
+    const { username, role, descrip } = req.body;
+    await db.query(
+      "UPDATE users SET username=?, role=?, descrip=? WHERE id=?",
+      [username, role, descrip, req.params.id],
+    );
+    res.json({ message: "User updated successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+async function watermarkFile(filePath) {
+  try {
+    if (!filePath) {
+      throw new Error("No file path provided.");
+    }
+
+    // If only a filename is passed, convert it to the full path
+    const fullPath = path.isAbsolute(filePath)
+      ? filePath
+      : path.join(__dirname, "uploads", filePath);
+
+    // Only watermark PDFs
+    if (path.extname(fullPath).toLowerCase() !== ".pdf") {
+      throw new Error("File is not a PDF.");
+    }
+
+    const pdfBytes = fs.readFileSync(fullPath);
+
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+
+    const logoBytes = fs.readFileSync(
+      path.join(__dirname, "uploads", "stamp_test.png")
+    );
+
+    const logo = await pdfDoc.embedPng(logoBytes);
+
+    pdfDoc.getPages().forEach((page) => {
+      const { width, height } = page.getSize();
+
+      page.drawImage(logo, {
+        x: width / 2 - 100,
+        y: height / 2 - 100,
+        width: 200,
+        height: 200,
+        opacity: 0.08,
+      });
+    });
+
+    const newPdf = await pdfDoc.save();
+
+    fs.writeFileSync(fullPath, newPdf);
+
+    return {
+      success: true,
+      message: "Watermark added successfully.",
+      file: fullPath,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      message: err.message,
+    };
+  }
+}
+app.post("/watermark/:id", async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT file_path FROM cash_advances WHERE id = ?",
+      [req.params.id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({
+        error: "File not found",
+      });
+    }
+
+    const result = await watermarkFile(rows[0].file_path);
+
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+});
 app.listen(process.env.PORT, () => {
   console.log("Server running on port " + process.env.PORT);
 });

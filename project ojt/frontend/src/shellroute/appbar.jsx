@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { FiRefreshCw } from "react-icons/fi"; // optional, replace with inline SVG if you don't want react-icons
 import { useLocation } from "react-router-dom";
+import "../App.css";
 export default function AppBar() {
   const [query, setQuery] = useState("");
   const [showIcons, setShowIcons] = useState(true);
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef(null);
   const user = JSON.parse(localStorage.getItem("user"));
   const location = useLocation();
 
@@ -26,6 +29,19 @@ export default function AppBar() {
       console.log("Search for:", query);
     }
   }
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   function handleReload() {
     // reload the page
@@ -132,18 +148,42 @@ export default function AppBar() {
               {user?.descrip}
             </span>
           </div>
-          {user?.image ? (
-            <img
-              // Changed from image/jpeg to image/png
-              src={`data:image/png;base64,${user.image}`}
-              alt="Profile"
-              className="w-10 h-10 rounded-full object-cover"
-            />
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center">
-              {user?.username?.charAt(0).toUpperCase()}
+          <div className="relative" ref={menuRef}>
+            {/* Avatar (clickable) */}
+            <div onClick={() => setOpen(!open)} className="cursor-pointer">
+              {user?.image ? (
+                <img
+                  src={`data:image/png;base64,${user.image}`}
+                  alt="Profile"
+                  className="w-10 h-10 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center">
+                  {user?.username?.charAt(0).toUpperCase()}
+                </div>
+              )}
             </div>
-          )}
+
+            {/* Dropdown */}
+            {open && (
+              <div
+                className="
+                  absolute right-0 mt-2 w-40 bg-white border rounded shadow-lg z-50
+                  animate-dropdown
+                  "
+              >
+                <button
+                  onClick={() => {
+                    localStorage.removeItem("user");
+                    window.location.href = "/";
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 text-black"
+                >
+                  Logout
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </header>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { formatDateTime } from "../functions";
+import ConfirmDeleteModal from "../popup/delete_comfimation";
 import CashAdvanceModal from "../popup/CashPopup";
 import axios from "axios";
 import OfficialModal from "../popup/Officialpopup";
@@ -10,6 +11,7 @@ function Dashboard() {
   const [users, setUsers] = useState([]);
   const [bondedOfficials, setBondedOfficials] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [openDeleteId, setOpenDeleteId] = useState([null]);
   const [showOfficialModal, setShowOfficialModal] = useState(false);
   const [selectedCashAdvance, setSelectedCashAdvance] = useState(null);
   const [selectedOfficial, setSelectedOfficial] = useState(null);
@@ -27,9 +29,6 @@ function Dashboard() {
   };
 
   const handleDeleteOfficial = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this official?"))
-      return;
-
     try {
       const res = await fetch(`http://localhost:5000/api/officials/${id}`, {
         method: "DELETE",
@@ -49,34 +48,33 @@ function Dashboard() {
 
     const interval = setInterval(() => {
       fetchData(); // auto refresh
-    }, 5000); // every 3 seconds
+    }, 100000); 
 
     return () => clearInterval(interval); // cleanup
   }, []);
   const handleOfficialSubmit = async (formData) => {
-  const isEdit = !!selectedOfficial;
+    const isEdit = !!selectedOfficial;
 
-  const url = isEdit
-    ? `http://localhost:5000/api/officials/${selectedOfficial.id}`
-    : "http://localhost:5000/api/officials";
+    const url = isEdit
+      ? `http://localhost:5000/api/officials/${selectedOfficial.id}`
+      : "http://localhost:5000/api/officials";
 
-  const method = isEdit ? "PUT" : "POST";
+    const method = isEdit ? "PUT" : "POST";
 
-  try {
-    await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(formData),
-    });
+    try {
+      await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
 
-    fetchData();
-    setShowOfficialModal(false); 
-    setSelectedOfficial(null);   
-  } catch (err) {
-    console.error("Error saving official:", err);
-  }
-};
-
+      fetchData();
+      setShowOfficialModal(false);
+      setSelectedOfficial(null);
+    } catch (err) {
+      console.error("Error saving official:", err);
+    }
+  };
 
   const handleUserSubmit = async (formData) => {
     try {
@@ -97,7 +95,7 @@ function Dashboard() {
       if (!res.ok) throw new Error(data.error || "Transaction failure");
 
       setShowUserModal(false);
-      fetchData(); 
+      fetchData();
     } catch (err) {
       console.error("User Save error:", err);
       alert(err.message);
@@ -105,13 +103,6 @@ function Dashboard() {
   };
 
   const handleDeleteUser = async (id) => {
-    if (
-      !window.confirm(
-        "Are you sure you want to completely remove this user account?",
-      )
-    )
-      return;
-
     try {
       const res = await fetch(`http://localhost:5000/api/users/${id}`, {
         method: "DELETE",
@@ -126,35 +117,32 @@ function Dashboard() {
 
   // Handle Form Submission (Create or Update)
   const handleModalSubmit = async (data) => {
-  try {
-    const isEdit = !!selectedCashAdvance;
-    const url = isEdit
-      ? `http://localhost:5000/cash-advances/${selectedCashAdvance.id}`
-      : "http://localhost:5000/cash-advances";
+    try {
+      const isEdit = !!selectedCashAdvance;
+      const url = isEdit
+        ? `http://localhost:5000/cash-advances/${selectedCashAdvance.id}`
+        : "http://localhost:5000/cash-advances";
 
-    const method = isEdit ? "put" : "post";
+      const method = isEdit ? "put" : "post";
 
-    const response = await axios({
-      method,
-      url,
-      data, 
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+      const response = await axios({
+        method,
+        url,
+        data,
+        headers: { "Content-Type": "multipart/form-data" },
+      });
 
-    console.log("Saved:", response.data);
-    setShowModal(false);
-    fetchData();
-  } catch (err) {
-    console.error("Submission error:", err.response?.data || err.message);
-    alert("Failed to save transaction. Check backend logs for SQL errors.");
-  }
-};
+      console.log("Saved:", response.data);
+      setShowModal(false);
+      fetchData();
+    } catch (err) {
+      console.error("Submission error:", err.response?.data || err.message);
+      alert("Failed to save transaction. Check backend logs for SQL errors.");
+    }
+  };
 
   // Handle Record Removal
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this cash advance?"))
-      return;
-
     try {
       const response = await fetch(
         `http://localhost:5000/cash-advances/${id}`,
@@ -169,6 +157,7 @@ function Dashboard() {
       console.error("Deletion error:", err);
     }
   };
+
   const settledCash = cashAdvances
     .filter((c) => c.status === "Done")
     .reduce((sum, c) => sum + Number(c.amount), 0);
@@ -311,26 +300,38 @@ function Dashboard() {
                       {item.status}
                     </span>
                   </td>
-                  <td className="p-3 space-x-2">
+                  <td className="p-3">
+                    <div className="flex items-center gap-2">
                     <button
                       className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded"
                       onClick={() => {
-                        setSelectedCashAdvance(item); // FIXED: Passing actual item data
+                        setSelectedCashAdvance(item);
                         setShowModal(true);
                       }}
                     >
                       Edit
                     </button>
+                  
 
                     <button
                       className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
-                      onClick={() => handleDelete(item.id)}
+                      onClick={() => setOpenDeleteId(item.id)}
                     >
                       Delete
                     </button>
+                    </div>
                   </td>
+
+                  <ConfirmDeleteModal
+                    open={openDeleteId === item.id}
+                    onClose={() => setOpenDeleteId(null)}
+                    onConfirm={() => handleDelete(item.id)}
+                    type="Cash Advance"
+                  />
+                  
                 </tr>
               ))}
+              
             </tbody>
           </table>
         </div>
@@ -392,12 +393,21 @@ function Dashboard() {
                     </button>
 
                     <button
-                      className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
-                      onClick={() => handleDeleteUser(u.id)}
+                      className="bg-red-600 text-white px-3 py-1 rounded"
+                      onClick={() => setOpenDeleteId(u.id)}
                     >
                       Delete
                     </button>
+
+              
                   </td>
+
+                  <ConfirmDeleteModal
+                    open={openDeleteId === u.id}
+                    onClose={() => setOpenDeleteId(null)}
+                    onConfirm={() => handleDeleteUser(u.id)}
+                    type="User"
+                  />
                 </tr>
               ))}
             </tbody>
@@ -470,14 +480,20 @@ function Dashboard() {
                     >
                       Edit
                     </button>
-
                     <button
-                      className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
-                      onClick={() => handleDeleteOfficial(b.id)}
+                      className="bg-red-600 text-white px-3 py-1 rounded"
+                      onClick={() => setOpenDeleteId(b.id)}
                     >
                       Delete
                     </button>
                   </td>
+
+                    <ConfirmDeleteModal
+                      open={openDeleteId === b.id}
+                      onClose={() => setOpenDeleteId(null)}
+                      onConfirm={() => handleDeleteOfficial(b.id)}
+                      type="Official"
+                    />
                 </tr>
               ))}
             </tbody>

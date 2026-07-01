@@ -4,7 +4,7 @@ import logo from "../assets/logo.png";
 import logo_bill from "../assets/logo bill.png";
 import logo_report from "../assets/logo_report.png";
 import logo_logs from "../assets/logs.png";
-import { FiCheck, FiX } from "react-icons/fi";
+import { FaCheckCircle,FaTimesCircle } from "react-icons/fa";
 export default function Sidebar() {
   const [bondedOfficials, setBondedOfficials] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -87,13 +87,13 @@ export default function Sidebar() {
                     </td>
                     <td className="p-2 pr-4 text-right border border-purple-300 text-sm">
                       {bo.is_available ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-                          <FiCheck className="w-4 h-4" aria-hidden="true" />
+                        <span className="inline-flex items-center px-2 py-0.5  text-green-700">
+                          <FaCheckCircle className="w-5 h-5" aria-hidden="true" />
                           <span className="sr-only">Available</span>
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-red-100 text-red-600">
-                          <FiX className="w-4 h-4" aria-hidden="true" />
+                        <span className="inline-flex items-center px-2 py-0.5 text-red-600">
+                          <FaTimesCircle className="w-5 h-5" aria-hidden="true" />
                           <span className="sr-only">Unavailable</span>
                         </span>
                       )}
